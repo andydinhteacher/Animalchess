@@ -1,0 +1,992 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#1e272e">
+    <title>Cờ Thú 2D - Safari Chess</title>
+    <!-- Icon hiển thị trên Tab trình duyệt và khi lưu ra Màn hình chính -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🦁</text></svg>">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%231e272e%22/><text x=%2250%%22 y=%2255%%22 dominant-baseline=%22central%22 text-anchor=%22middle%22 font-size=%2270%22>🦁</text></svg>">
+
+    <style>
+        :root {
+            --bg-main: #1e272e;
+            --land-color: #f1f2f6;
+            --river-color: #70a1ff;
+            --p1-color: #ff4757;
+            --p2-color: #2e86de;
+            /* Tự động co giãn kích thước ô cờ để luôn vừa khít cả chiều ngang (7 cột) và chiều dọc (9 hàng + thanh công cụ) */
+            --cell-size: min(calc((100vw - 28px) / 7), calc((100dvh - 155px) / 9), 68px);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation; /* Chống zoom khi chạm liên tiếp trên điện thoại */
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-main);
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100dvh;
+            width: 100vw;
+            overflow: hidden; /* Không bị trôi trang khi thao tác trên cảm ứng */
+            padding: 8px;
+        }
+
+        .app-header {
+            display: flex;
+             flex-direction: column;
+            align-items: center;
+            width: calc(var(--cell-size) * 7 + 14px);
+            max-width: 100%;
+            margin-bottom: 6px;
+        }
+
+        h1 {
+            font-size: clamp(1.1rem, 2.8vmin, 1.55rem);
+            margin-bottom: 6px;
+            color: #ffa502;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.4);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            white-space: nowrap;
+        }
+
+        /* Thanh công cụ điều khiển */
+        .toolbar {
+            background: #2f3542;
+            padding: 6px 10px;
+            border-radius: 10px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            margin-bottom: 6px;
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: clamp(0.75rem, 1.8vmin, 0.85rem);
+        }
+
+        select, button {
+            padding: 5px 9px;
+            border-radius: 6px;
+            border: none;
+            font-size: clamp(0.75rem, 1.8vmin, 0.85rem);
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.1s, filter 0.2s;
+        }
+
+        select {
+            background: #57606f;
+            color: white;
+            outline: none;
+        }
+
+        button {
+            background: #ffa502;
+            color: #1e272e;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        button:active {
+            transform: scale(0.95);
+        }
+
+        button.btn-secondary {
+            background: #747d8c;
+            color: white;
+        }
+
+        button.btn-info {
+            background: #1e90ff;
+            color: white;
+        }
+
+        /* Thanh trạng thái */
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            background: #2f3542;
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-weight: bold;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            gap: 8px;
+        }
+
+        .turn-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 3px 10px;
+            border-radius: 16px;
+            font-size: clamp(0.75rem, 1.9vmin, 0.9rem);
+            white-space: nowrap;
+        }
+
+        .turn-p1 {
+            background: rgba(255, 71, 87, 0.2);
+            color: #ff6b81;
+            border: 1px solid #ff4757;
+        }
+
+        .turn-p2 {
+            background: rgba(46, 134, 222, 0.2);
+            color: #70a1ff;
+            border: 1px solid #2e86de;
+        }
+
+        #gameStatusText {
+            font-size: clamp(0.72rem, 1.8vmin, 0.85rem);
+            color: #ced6e0;
+            text-align: right;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Bàn cờ 7x9 */
+        .board-wrapper {
+            background: #57606f;
+            padding: 6px;
+            border-radius: 12px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.5);
+        }
+
+        .board {
+            display: grid;
+            grid-template-columns: repeat(7, var(--cell-size));
+            grid-template-rows: repeat(9, var(--cell-size));
+            gap: 2px;
+            background-color: #2f3542;
+            border: 2px solid #2f3542;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        .cell {
+            background-color: var(--land-color);
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+
+        /* Địa hình đặc biệt */
+        .cell.river {
+            background-color: var(--river-color);
+            background-image: radial-gradient(circle at 50% 50%, rgba(255,255,255,0.22) 10%, transparent 60%);
+        }
+
+        .cell.trap-p1, .cell.trap-p2 {
+            background-color: #ffeaa7;
+        }
+
+        .cell.den-p1 {
+            background-color: #ffcccc;
+        }
+
+        .cell.den-p2 {
+            background-color: #cce0ff;
+        }
+
+        .terrain-label {
+            position: absolute;
+            font-size: calc(var(--cell-size) * 0.14);
+            font-weight: 700;
+            color: rgba(0,0,0,0.38);
+            bottom: 2px;
+            right: 3px;
+            pointer-events: none;
+            text-transform: uppercase;
+        }
+
+        .terrain-icon {
+            position: absolute;
+            font-size: calc(var(--cell-size) * 0.38);
+            opacity: 0.18;
+            pointer-events: none;
+        }
+
+        /* Hiệu ứng chọn & Nước đi */
+        .cell.selected {
+            background-color: #fff200 !important;
+        }
+
+        .cell.last-move {
+            box-shadow: inset 0 0 0 3px #ffa502;
+        }
+
+        .cell.valid-move::after {
+            content: '';
+            width: calc(var(--cell-size) * 0.28);
+            height: calc(var(--cell-size) * 0.28);
+            background-color: rgba(46, 213, 115, 0.85);
+            border-radius: 50%;
+            position: absolute;
+            z-index: 5;
+            box-shadow: 0 0 5px rgba(0,0,0,0.3);
+            pointer-events: none;
+        }
+
+        .cell.valid-capture {
+            background-color: rgba(255, 71, 87, 0.35) !important;
+        }
+
+        .cell.valid-capture::after {
+            content: '';
+            width: 86%;
+            height: 86%;
+            border: 2.5px dashed #ff4757;
+            border-radius: 50%;
+            position: absolute;
+            z-index: 5;
+            pointer-events: none;
+        }
+
+        /* Quân cờ tỉ lệ động theo kích thước ô */
+        .piece {
+            width: 85%;
+            height: 85%;
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            z-index: 2;
+            box-shadow: 0 3px 5px rgba(0,0,0,0.35), inset 0 2px 3px rgba(255,255,255,0.4);
+            transition: transform 0.2s;
+        }
+
+        .piece.p1 {
+            background: radial-gradient(circle at 30% 30%, #ff6b81, #ff4757);
+            border: 2.5px solid #b33939;
+            color: #fff;
+        }
+
+        .piece.p2 {
+            background: radial-gradient(circle at 30% 30%, #54a0ff, #2e86de);
+            border: 2.5px solid #227093;
+            color: #fff;
+        }
+
+        /* Xoay ngược quân Xanh 180 độ khi 2 người chơi ngồi đối diện nhau qua điện thoại/tablet */
+        .board.flip-p2 .piece.p2 {
+            transform: rotate(180deg);
+        }
+
+        .piece-emoji {
+            font-size: calc(var(--cell-size) * 0.38);
+            line-height: 1;
+            filter: drop-shadow(0 1px 2px rgba(0,0,0,0.3));
+        }
+
+        .piece-name {
+            font-size: calc(var(--cell-size) * 0.15);
+            font-weight: 800;
+            margin-top: 1px;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+        }
+
+        .piece-rank {
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            background: #1e272e;
+            color: #ffa502;
+            font-size: calc(var(--cell-size) * 0.16);
+            font-weight: 900;
+            width: calc(var(--cell-size) * 0.28);
+            height: calc(var(--cell-size) * 0.28);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1.5px solid #fff;
+        }
+
+        /* Modal Hướng dẫn */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.78);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            padding: 15px;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: #2f3542;
+            color: #f1f2f6;
+            max-width: 580px;
+            width: 100%;
+            max-height: 85dvh;
+            border-radius: 14px;
+            padding: 18px;
+            overflow-y: auto;
+            touch-action: pan-y; /* Cho phép cuộn dọc trong bảng luật chơi */
+            box-shadow: 0 15px 35px rgba(0,0,0,0.6);
+            border: 1px solid #57606f;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #57606f;
+            padding-bottom: 10px;
+            margin-bottom: 12px;
+        }
+
+        .modal-header h2 {
+            color: #ffa502;
+            font-size: 1.25rem;
+        }
+
+        .close-btn {
+            background: #ff4757;
+            color: white;
+            border: none;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .rules-content h3 {
+            color: #70a1ff;
+            margin: 12px 0 5px;
+            font-size: 1rem;
+        }
+
+        .rules-content ul {
+            padding-left: 18px;
+            line-height: 1.55;
+            font-size: 0.9rem;
+        }
+
+        .rules-content li {
+            margin-bottom: 5px;
+        }
+
+        .rank-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 6px;
+            margin: 8px 0;
+        }
+
+        .rank-card {
+            background: #1e272e;
+            padding: 6px 8px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.82rem;
+            border: 1px solid #57606f;
+        }
+
+        /* Bố cục ngang tự động khi xoay ngang điện thoại hoặc màn hình thấp */
+        @media (min-aspect-ratio: 4/3) and (max-height: 760px) {
+            :root {
+                --cell-size: min(calc((100dvh - 30px) / 9), 64px);
+            }
+            body {
+                flex-direction: row;
+                gap: 20px;
+            }
+            .app-header {
+                width: 240px;
+                margin-bottom: 0;
+            }
+            .toolbar {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .control-group {
+                justify-content: space-between;
+            }
+            .status-bar {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            #gameStatusText {
+                text-align: left;
+                white-space: normal;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="app-header">
+        <h1>🦁 Cờ Thú 2D (Safari Chess) 🐘</h1>
+
+        <div class="toolbar">
+            <div class="control-group">
+                <label for="gameMode">Chế độ:</label>
+                <select id="gameMode">
+                    <option value="pve">Đấu với Máy (PvE)</option>
+                    <option value="pvp">2 Người (Ngồi đối diện)</option>
+                </select>
+            </div>
+
+            <div class="control-group" id="aiLevelGroup">
+                <label for="aiLevel">Độ khó:</label>
+                <select id="aiLevel">
+                    <option value="1">Dễ (Tập sự)</option>
+                    <option value="2" selected>Trung bình</option>
+                    <option value="3">Khó (Cao thủ)</option>
+                </select>
+            </div>
+
+            <button id="btnUndo" class="btn-secondary" title="Đi lại nước trước">↩️ Đi lại</button>
+            <button id="btnRestart" title="Bắt đầu ván mới">🔄 Ván mới</button>
+            <button id="btnRules" class="btn-info">📖 Luật</button>
+        </div>
+
+        <div class="status-bar">
+            <div id="turnIndicator" class="turn-badge turn-p1">🔴 Lượt Quân Đỏ</div>
+            <div id="gameStatusText">Chọn quân để đi</div>
+        </div>
+    </div>
+
+    <div class="board-wrapper">
+        <div id="board" class="board"></div>
+    </div>
+
+    <!-- Modal Luật chơi -->
+    <div id="rulesModal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>📖 Hướng Dẫn Luật Cờ Thú</h2>
+                <button class="close-btn" id="closeRules">✕</button>
+            </div>
+            <div class="rules-content">
+                <h3>1. Mục tiêu chiến thắng</h3>
+                <ul>
+                    <li>Đưa được bất kỳ một quân thú nào của mình bước vào <strong>Hang (⭐)</strong> của đối phương.</li>
+                    <li>Hoặc ăn hết toàn bộ quân thú của đối phương.</li>
+                </ul>
+
+                <h3>2. Cấp bậc sức mạnh (Từ 1 đến 8)</h3>
+                <p style="font-size: 0.85rem; color: #ccc;">Quân có số lớn hơn sẽ ăn được quân có số nhỏ hơn hoặc bằng nó:</p>
+                <div class="rank-list">
+                    <div class="rank-card"><span>8️⃣ 🐘</span> <b>Voi</b></div>
+                    <div class="rank-card"><span>7️⃣ 🦁</span> <b>Sư Tử</b></div>
+                    <div class="rank-card"><span>6️⃣ 🐯</span> <b>Hổ</b></div>
+                    <div class="rank-card"><span>5️⃣ 🐆</span> <b>Báo</b></div>
+                    <div class="rank-card"><span>4️⃣ 🐺</span> <b>Chó Sói</b></div>
+                    <div class="rank-card"><span>3️⃣ 🐕</span> <b>Chó</b></div>
+                    <div class="rank-card"><span>2️⃣ 🐱</span> <b>Mèo</b></div>
+                    <div class="rank-card"><span>1️⃣ 🐭</span> <b>Chuột</b></div>
+                </div>
+                <ul>
+                    <li><strong>Khắc chế đặc biệt:</strong> <b>Chuột (1)</b> ăn được <b>Voi (8)</b>. Ngược lại, <b>Voi (8) KHÔNG thể ăn Chuột (1)</b>.</li>
+                </ul>
+
+                <h3>3. Cách di chuyển & Kỹ năng đặc biệt</h3>
+                <ul>
+                    <li><strong>Di chuyển cơ bản:</strong> Đi từng ô một ngang hoặc dọc (không đi chéo). Không được bước vào Hang của chính mình.</li>
+                    <li><strong>🐭 Chuột (Bơi lội):</strong> Là loài duy nhất xuống được <b>Sông (🌊)</b>. Chuột dưới nước không thể nhảy lên cạn ăn Voi ngay (phải lên cạn trước), và quân trên cạn không thể ăn Chuột dưới nước. Hai Chuột cùng dưới nước thì ăn được nhau.</li>
+                    <li><strong>🦁 Sư Tử & 🐯 Hổ (Nhảy qua sông):</strong> Có thể nhảy thẳng qua sông theo chiều ngang hoặc dọc. Nếu có <b>Chuột</b> đang bơi cản ngay đường nhảy thì không nhảy qua được.</li>
+                </ul>
+
+                <h3>4. Địa hình đặc biệt</h3>
+                <ul>
+                    <li><strong>🕸️ Bẫy (3 ô quanh Hang):</strong> Khi quân địch bước vào Bẫy của bạn, sức mạnh của nó giảm về <b>0</b> — bất kỳ quân nào của bạn cũng ăn được nó.</li>
+                    <li><strong>⭐ Hang thú:</strong> Bước vào Hang đối phương sẽ giành chiến thắng ngay lập tức!</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+<script>
+const ROWS = 9;
+const COLS = 7;
+
+const ANIMAL_DATA = {
+    1: { name: 'Chuột', emoji: '🐭', rank: 1 },
+    2: { name: 'Mèo',   emoji: '🐱', rank: 2 },
+    3: { name: 'Chó',   emoji: '🐕', rank: 3 },
+    4: { name: 'Sói',   emoji: '🐺', rank: 4 },
+    5: { name: 'Báo',   emoji: '🐆', rank: 5 },
+    6: { name: 'Hổ',    emoji: '🐯', rank: 6 },
+    7: { name: 'Sư Tử', emoji: '🦁', rank: 7 },
+    8: { name: 'Voi',   emoji: '🐘', rank: 8 }
+};
+
+const isRiver = (r, c) => (r >= 3 && r <= 5) && (c === 1 || c === 2 || c === 4 || c === 5);
+const isDenP2 = (r, c) => r === 0 && c === 3;
+const isDenP1 = (r, c) => r === 8 && c === 3;
+const isTrapP2 = (r, c) => (r === 0 && (c === 2 || c === 4)) || (r === 1 && c === 3);
+const isTrapP1 = (r, c) => (r === 8 && (c === 2 || c === 4)) || (r === 7 && c === 3);
+
+let board = [];
+let currentPlayer = 1;
+let selectedCell = null;
+let validMoves = [];
+let moveHistory = [];
+let lastMove = null;
+let gameOver = false;
+let isAIThinking = false;
+
+const boardEl = document.getElementById('board');
+const turnIndicator = document.getElementById('turnIndicator');
+const gameStatusText = document.getElementById('gameStatusText');
+const gameModeSelect = document.getElementById('gameMode');
+const aiLevelSelect = document.getElementById('aiLevel');
+const aiLevelGroup = document.getElementById('aiLevelGroup');
+
+function initGame() {
+    board = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+
+    const p2Setup = [
+        [0, 0, 7], [0, 6, 6],
+        [1, 1, 3], [1, 5, 2],
+        [2, 0, 1], [2, 2, 5], [2, 4, 4], [2, 6, 8]
+    ];
+    p2Setup.forEach(([r, c, rank]) => board[r][c] = { player: 2, rank });
+
+    const p1Setup = [
+        [8, 6, 7], [8, 0, 6],
+        [7, 5, 3], [7, 1, 2],
+        [6, 6, 1], [6, 4, 5], [6, 2, 4], [6, 0, 8]
+    ];
+    p1Setup.forEach(([r, c, rank]) => board[r][c] = { player: 1, rank });
+
+    currentPlayer = 1;
+    selectedCell = null;
+    validMoves = [];
+    moveHistory = [];
+    lastMove = null;
+    gameOver = false;
+    isAIThinking = false;
+
+    // Nếu chế độ 2 người chơi, xoay ngược quân Xanh để ngồi đối diện nhìn thuận mắt
+    boardEl.classList.toggle('flip-p2', gameModeSelect.value === 'pvp');
+
+    updateStatusUI();
+    renderBoard();
+}
+
+function renderBoard() {
+    boardEl.innerHTML = '';
+
+    for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+            const cell = document.createElement('div');
+            cell.className = 'cell';
+
+            if (isRiver(r, c)) {
+                cell.classList.add('river');
+                cell.innerHTML = `<span class="terrain-icon">🌊</span>`;
+            } else if (isDenP1(r, c)) {
+                cell.classList.add('den-p1');
+                cell.innerHTML = `<span class="terrain-icon">⭐</span><span class="terrain-label">Hang Đỏ</span>`;
+            } else if (isDenP2(r, c)) {
+                cell.classList.add('den-p2');
+                cell.innerHTML = `<span class="terrain-icon">⭐</span><span class="terrain-label">Hang Xanh</span>`;
+            } else if (isTrapP1(r, c)) {
+                cell.classList.add('trap-p1');
+                cell.innerHTML = `<span class="terrain-icon">🕸️</span><span class="terrain-label">Bẫy</span>`;
+            } else if (isTrapP2(r, c)) {
+                cell.classList.add('trap-p2');
+                cell.innerHTML = `<span class="terrain-icon">🕸️</span><span class="terrain-label">Bẫy</span>`;
+            }
+
+            if (selectedCell && selectedCell.r === r && selectedCell.c === c) {
+                cell.classList.add('selected');
+            }
+            if (lastMove && ((lastMove.fromR === r && lastMove.fromC === c) || (lastMove.toR === r && lastMove.toC === c))) {
+                cell.classList.add('last-move');
+            }
+
+            const moveInfo = validMoves.find(m => m.toR === r && m.toC === c);
+            if (moveInfo) {
+                cell.classList.add(board[r][c] ? 'valid-capture' : 'valid-move');
+            }
+
+            const piece = board[r][c];
+            if (piece) {
+                const info = ANIMAL_DATA[piece.rank];
+                const pieceEl = document.createElement('div');
+                pieceEl.className = `piece p${piece.player}`;
+                pieceEl.innerHTML = `
+                    <div class="piece-rank">${piece.rank}</div>
+                    <div class="piece-emoji">${info.emoji}</div>
+                    <div class="piece-name">${info.name}</div>
+                `;
+                cell.appendChild(pieceEl);
+            }
+
+            cell.addEventListener('click', () => handleCellClick(r, c));
+            boardEl.appendChild(cell);
+        }
+    }
+}
+
+function isPieceInEnemyTrap(player, r, c) {
+    return player === 1 ? isTrapP2(r, c) : isTrapP1(r, c);
+}
+
+function canCapture(attacker, fromR, fromC, defender, toR, toC) {
+    if (attacker.player === defender.player) return false;
+    if (isPieceInEnemyTrap(defender.player, toR, toC)) return true;
+
+    const fromWater = isRiver(fromR, fromC);
+    const toWater = isRiver(toR, toC);
+    if (fromWater !== toWater) return false;
+
+    if (attacker.rank === 1 && defender.rank === 8) return true;
+    if (attacker.rank === 8 && defender.rank === 1) return false;
+
+    return attacker.rank >= defender.rank;
+}
+
+function getValidMovesForPiece(stateBoard, r, c) {
+    const piece = stateBoard[r][c];
+    if (!piece) return [];
+
+    const moves = [];
+    const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+
+    for (const [dr, dc] of directions) {
+        let nr = r + dr;
+        let nc = c + dc;
+
+        if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) continue;
+        if (piece.player === 1 && isDenP1(nr, nc)) continue;
+        if (piece.player === 2 && isDenP2(nr, nc)) continue;
+
+        if (isRiver(nr, nc)) {
+            if (piece.rank === 1) {
+                const target = stateBoard[nr][nc];
+                if (!target || canCapture(piece, r, c, target, nr, nc)) {
+                    moves.push({ fromR: r, fromC: c, toR: nr, toC: nc });
+                }
+            } else if (piece.rank === 6 || piece.rank === 7) {
+                let jumpR = nr;
+                let jumpC = nc;
+                let blockedByRat = false;
+
+                while (isRiver(jumpR, jumpC)) {
+                    if (stateBoard[jumpR][jumpC] !== null) {
+                        blockedByRat = true;
+                        break;
+                    }
+                    jumpR += dr;
+                    jumpC += dc;
+                }
+
+                if (!blockedByRat && jumpR >= 0 && jumpR < ROWS && jumpC >= 0 && jumpC < COLS) {
+                    const target = stateBoard[jumpR][jumpC];
+                    if (!target || canCapture(piece, r, c, target, jumpR, jumpC)) {
+                        moves.push({ fromR: r, fromC: c, toR: jumpR, toC: jumpC });
+                    }
+                }
+            }
+            continue;
+        }
+
+        const target = stateBoard[nr][nc];
+        if (!target || canCapture(piece, r, c, target, nr, nc)) {
+            moves.push({ fromR: r, fromC: c, toR: nr, toC: nc });
+        }
+    }
+
+    return moves;
+}
+
+function getAllMovesForPlayer(stateBoard, player) {
+    const allMoves = [];
+    for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+            if (stateBoard[r][c] && stateBoard[r][c].player === player) {
+                allMoves.push(...getValidMovesForPiece(stateBoard, r, c));
+            }
+        }
+    }
+    return allMoves;
+}
+
+function handleCellClick(r, c) {
+    if (gameOver || isAIThinking) return;
+
+    const chosenMove = validMoves.find(m => m.toR === r && m.toC === c);
+    if (selectedCell && chosenMove) {
+        executeMove(chosenMove);
+        return;
+    }
+
+    const clickedPiece = board[r][c];
+    if (clickedPiece && clickedPiece.player === currentPlayer) {
+        selectedCell = { r, c };
+        validMoves = getValidMovesForPiece(board, r, c);
+        const info = ANIMAL_DATA[clickedPiece.rank];
+        gameStatusText.textContent = `Chọn: ${info.emoji} ${info.name} (Bậc ${info.rank})`;
+        renderBoard();
+    } else {
+        selectedCell = null;
+        validMoves = [];
+        gameStatusText.textContent = 'Chọn quân để đi';
+        renderBoard();
+    }
+}
+
+function executeMove(move) {
+    moveHistory.push({
+        boardSnapshot: board.map(row => row.map(cell => cell ? { ...cell } : null)),
+        currentPlayer,
+        lastMove: lastMove ? { ...lastMove } : null
+    });
+
+    const movingPiece = board[move.fromR][move.fromC];
+    const capturedPiece = board[move.toR][move.toC];
+
+    board[move.toR][move.toC] = movingPiece;
+    board[move.fromR][move.fromC] = null;
+
+    lastMove = move;
+    selectedCell = null;
+    validMoves = [];
+
+    const winner = checkWinner(board);
+    if (winner) {
+        gameOver = true;
+        renderBoard();
+        announceWinner(winner);
+        return;
+    }
+
+    currentPlayer = currentPlayer === 1 ? 2 : 1;
+    updateStatusUI(capturedPiece);
+    renderBoard();
+
+    if (!gameOver && gameModeSelect.value === 'pve' && currentPlayer === 2) {
+        isAIThinking = true;
+        gameStatusText.textContent = '🤖 Máy đang tính...';
+        setTimeout(makeAIMove, 320);
+    }
+}
+
+function checkWinner(stateBoard) {
+    if (stateBoard[0][3] && stateBoard[0][3].player === 1) return 1;
+    if (stateBoard[8][3] && stateBoard[8][3].player === 2) return 2;
+
+    if (getAllMovesForPlayer(stateBoard, 2).length === 0) return 1;
+    if (getAllMovesForPlayer(stateBoard, 1).length === 0) return 2;
+
+    return null;
+}
+
+function updateStatusUI(capturedPiece = null) {
+    if (currentPlayer === 1) {
+        turnIndicator.className = 'turn-badge turn-p1';
+        turnIndicator.innerHTML = '🔴 Lượt Quân Đỏ';
+    } else {
+        turnIndicator.className = 'turn-badge turn-p2';
+        turnIndicator.innerHTML = gameModeSelect.value === 'pve' ? '🤖 Lượt Máy' : '🔵 Lượt Quân Xanh';
+    }
+
+    if (capturedPiece) {
+        const info = ANIMAL_DATA[capturedPiece.rank];
+        gameStatusText.textContent = `Đã bắt ${info.emoji} ${info.name}!`;
+    } else {
+        gameStatusText.textContent = 'Chọn quân để đi';
+    }
+}
+
+function announceWinner(winner) {
+    if (winner === 1) {
+        turnIndicator.className = 'turn-badge turn-p1';
+        turnIndicator.innerHTML = '🏆 QUÂN ĐỎ THẮNG!';
+        gameStatusText.textContent = 'Quân Đỏ đã giành chiến thắng!';
+    } else {
+        turnIndicator.className = 'turn-badge turn-p2';
+        turnIndicator.innerHTML = gameModeSelect.value === 'pve' ? '🤖 MÁY THẮNG!' : '🏆 QUÂN XANH THẮNG!';
+        gameStatusText.textContent = 'Ván đấu kết thúc!';
+    }
+}
+
+const PIECE_WEIGHTS = { 1: 50, 2: 25, 3: 35, 4: 45, 5: 60, 6: 85, 7: 100, 8: 115 };
+
+function evaluateBoard(stateBoard) {
+    if (stateBoard[8][3] && stateBoard[8][3].player === 2) return 99999;
+    if (stateBoard[0][3] && stateBoard[0][3].player === 1) return -99999;
+
+    let score = 0;
+    for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+            const p = stateBoard[r][c];
+            if (!p) continue;
+            let val = PIECE_WEIGHTS[p.rank];
+            if (p.player === 2) {
+                val += (12 - (Math.abs(8 - r) + Math.abs(3 - c))) * 4;
+                if (isTrapP1(r, c)) val += 45;
+                score += val;
+            } else {
+                val += (12 - (Math.abs(0 - r) + Math.abs(3 - c))) * 4;
+                if (isTrapP2(r, c)) val += 45;
+                score -= val;
+            }
+        }
+    }
+    return score;
+}
+
+function simulateMove(stateBoard, move) {
+    const nextBoard = stateBoard.map(row => row.map(cell => cell ? { ...cell } : null));
+    nextBoard[move.toR][move.toC] = nextBoard[move.fromR][move.fromC];
+    nextBoard[move.fromR][move.fromC] = null;
+    return nextBoard;
+}
+
+function minimax(stateBoard, depth, alpha, beta, isMaximizing) {
+    const winner = checkWinner(stateBoard);
+    if (winner === 2) return 99999 + depth;
+    if (winner === 1) return -99999 - depth;
+    if (depth === 0) return evaluateBoard(stateBoard);
+
+    if (isMaximizing) {
+        let maxEval = -Infinity;
+        const moves = getAllMovesForPlayer(stateBoard, 2);
+        moves.sort((a, b) => (stateBoard[b.toR][b.toC] ? 1 : 0) - (stateBoard[a.toR][a.toC] ? 1 : 0));
+        for (const m of moves) {
+            const ev = minimax(simulateMove(stateBoard, m), depth - 1, alpha, beta, false);
+            maxEval = Math.max(maxEval, ev);
+            alpha = Math.max(alpha, ev);
+            if (beta <= alpha) break;
+        }
+        return maxEval;
+    } else {
+        let minEval = Infinity;
+        const moves = getAllMovesForPlayer(stateBoard, 1);
+        moves.sort((a, b) => (stateBoard[b.toR][b.toC] ? 1 : 0) - (stateBoard[a.toR][a.toC] ? 1 : 0));
+        for (const m of moves) {
+            const ev = minimax(simulateMove(stateBoard, m), depth - 1, alpha, beta, true);
+            minEval = Math.min(minEval, ev);
+            beta = Math.min(beta, ev);
+            if (beta <= alpha) break;
+        }
+        return minEval;
+    }
+}
+
+function makeAIMove() {
+    if (gameOver) return;
+    const moves = getAllMovesForPlayer(board, 2);
+    if (moves.length === 0) return;
+
+    const level = parseInt(aiLevelSelect.value, 10);
+    let chosenMove = moves[0];
+
+    if (level === 1) {
+        const winMove = moves.find(m => isDenP1(m.toR, m.toC));
+        if (winMove) {
+            chosenMove = winMove;
+        } else {
+            const captureMoves = moves.filter(m => board[m.toR][m.toC] !== null);
+            if (captureMoves.length > 0 && Math.random() < 0.65) {
+                chosenMove = captureMoves[Math.floor(Math.random() * captureMoves.length)];
+            } else {
+                chosenMove = moves[Math.floor(Math.random() * moves.length)];
+            }
+        }
+    } else {
+        const searchDepth = level === 2 ? 2 : 4;
+        let bestScore = -Infinity;
+        let bestMoves = [];
+        for (const m of moves) {
+            const score = minimax(simulateMove(board, m), searchDepth - 1, -Infinity, Infinity, false);
+            if (score > bestScore) {
+                bestScore = score;
+                bestMoves = [m];
+            } else if (score === bestScore) {
+                bestMoves.push(m);
+            }
+        }
+        chosenMove = bestMoves[Math.floor(Math.random() * bestMoves.length)];
+    }
+
+    isAIThinking = false;
+    executeMove(chosenMove);
+}
+
+document.getElementById('btnRestart').addEventListener('click', initGame);
+
+document.getElementById('btnUndo').addEventListener('click', () => {
+    if (isAIThinking || moveHistory.length === 0) return;
+    const stepsToUndo = (gameModeSelect.value === 'pve' && currentPlayer === 1 && moveHistory.length >= 2) ? 2 : 1;
+    let state = null;
+    for (let i = 0; i < stepsToUndo; i++) {
+        state = moveHistory.pop();
+    }
+    if (state) {
+        board = state.boardSnapshot;
+        currentPlayer = state.currentPlayer;
+        lastMove = state.lastMove;
+        selectedCell = null;
+        validMoves = [];
+        gameOver = false;
+        updateStatusUI();
+        renderBoard();
+    }
+});
+
+gameModeSelect.addEventListener('change', () => {
+    aiLevelGroup.style.display = gameModeSelect.value === 'pve' ? 'flex' : 'none';
+    initGame();
+});
+
+const rulesModal = document.getElementById('rulesModal');
+document.getElementById('btnRules').addEventListener('click', () => rulesModal.classList.add('active'));
+document.getElementById('closeRules').addEventListener('click', () => rulesModal.classList.remove('active'));
+rulesModal.addEventListener('click', (e) => {
+    if (e.target === rulesModal) rulesModal.classList.remove('active');
+});
+
+initGame();
+</script>
+</body>
+</html>
